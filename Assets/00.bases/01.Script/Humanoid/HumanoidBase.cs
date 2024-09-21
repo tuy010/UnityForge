@@ -23,6 +23,10 @@ namespace Tuy.UnityForge.Base
         [SerializeField] private CharacterController controller;
         [SerializeField] private Collider bottomCollider;
 
+        [Header("IK")]
+        [SerializeField] private float footIKHeight;
+
+
         [Header("Unit Info")]
         [SerializeField] private float speed;
         [SerializeField] private float jumpHeight;
@@ -47,6 +51,9 @@ namespace Tuy.UnityForge.Base
         private bool isJump = false;
         private Vector3 playerVelocity = Vector3.zero;
         private const float gravity = -9.81f;
+
+        private Vector3 controllerCenter;
+        private float controllerHeight;
         #endregion
 
         #region Unity
@@ -67,6 +74,9 @@ namespace Tuy.UnityForge.Base
             controller ??= GetComponent<CharacterController>();
 
             groundLayer = LayerMask.GetMask("Ground");
+
+            controllerCenter = controller.center;
+            controllerHeight = controller.height;
         }
         #endregion
 
@@ -199,7 +209,20 @@ namespace Tuy.UnityForge.Base
         private void OnAnimatorIK(int _layerIndex)
         {
             Vector3? leftGoal =  ApplyFootIK(AvatarIKGoal.LeftFoot);
-            Vector3? rightRoal = ApplyFootIK(AvatarIKGoal.RightFoot);
+            Vector3? rightGoal = ApplyFootIK(AvatarIKGoal.RightFoot);
+
+            if(leftGoal == null || rightGoal == null || !(playerVelocity.x==0 && playerVelocity.z==0) )
+            {
+                controller.height = controllerHeight;
+                controller.center = controllerCenter;
+            }
+            else
+            {
+                float heightGap = Mathf.Abs(leftGoal.Value.y - rightGoal.Value.y);
+                controller.height = controllerHeight - heightGap;
+                controller.center = controllerCenter + new Vector3(0, heightGap/2, 0);
+            }
+            
         }
         private Vector3? ApplyFootIK(AvatarIKGoal foot)
         {
@@ -207,7 +230,7 @@ namespace Tuy.UnityForge.Base
             RaycastHit hit;
 
             // 발 아래로 Ray를 쏴서 지면을 감지
-            if (Physics.Raycast(footPosition+Vector3.up, Vector3.down, out hit, 1.5f, groundLayer))
+            if (Physics.Raycast(footPosition+new Vector3(0, footIKHeight, 0), Vector3.down, out hit, footIKHeight*2, groundLayer))
             {
                 Vector3 targetFootPosition = hit.point + new Vector3(0, 0.1f, 0);;
                 Quaternion targetFootRotation = Quaternion.LookRotation(transform.forward, hit.normal);
