@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Unity.Android.Gradle.Manifest;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -11,9 +12,19 @@ namespace Tuy.UnityForge.Base
         protected enum State
         {
             Idle,
-            Walk,
+            Move,
             Jump,
             Falling
+        }
+        protected enum animationParam
+        {
+            XDir,
+            YDir,
+            Jump,
+            Fall,
+            Move,
+            Crouch,
+            Run
         }
         #endregion
 
@@ -25,22 +36,41 @@ namespace Tuy.UnityForge.Base
 
         [Header("IK")]
         [SerializeField] private float footIKHeight;
+        [SerializeField] private Transform headPivot;
+        [SerializeField] private Transform baseAimPoint;
 
 
         [Header("Unit Info")]
-        [SerializeField] private float speed;
+        [SerializeField] private float walkSpeed;
+        [SerializeField] private float runSpeed;
+        [SerializeField] private float crouchSpeed;
         [SerializeField] private float jumpHeight;
         [SerializeField] private float gravityMultiplier;
+        [SerializeField] private float controllerCrouchHeight;
         #endregion
 
         #region Protected Field
         protected Vector2 moveingDir;
+        protected bool isCrouch;
+        protected bool isRunning;
+
+        protected Transform aimPoint;
 
         protected State nowState;
         protected State nextState { 
             get { return _nextState; }
             set { UpdateState(value); }
         }
+
+        readonly Dictionary<animationParam, string> animationParams = new Dictionary<animationParam, string>{
+            {animationParam.XDir, "XDir"},
+            {animationParam.YDir, "YDir"},
+            {animationParam.Jump, "Jump"},
+            {animationParam.Fall, "Fall"},
+            {animationParam.Move, "Move"},
+            {animationParam.Run, "Run"}
+        };
+        
         #endregion
 
         #region Private Field
@@ -52,8 +82,9 @@ namespace Tuy.UnityForge.Base
         private Vector3 playerVelocity = Vector3.zero;
         private const float gravity = -9.81f;
 
-        private Vector3 controllerCenter;
+        private Vector3 controllerCenter => new Vector3 (0, ( isCrouch ? controllerCrouchHeight : controllerHeight)/ 2, 0);
         private float controllerHeight;
+
         #endregion
 
         #region Unity
@@ -61,9 +92,52 @@ namespace Tuy.UnityForge.Base
         #endregion
 
         #region Public Methods
+        /// <summary>
+        /// Call To Start Jump
+        /// </summary>
         public void JumpFunc()
         {
-            if(nowState != State.Falling) isJump = true;
+            if (nowState == State.Falling || isCrouch) return;
+
+            isJump = true;
+            return;
+        }
+
+        /// <summary>
+        /// Call To Start/Stop Crouch
+        /// </summary>
+        /// <param name="value">Use Null to Toggle action</param>
+        public void CrouchFunc(bool? value = null)
+        {
+            if(nowState == State.Falling) return;
+
+            isCrouch = value != null? value.Value : !isCrouch;
+            animator.SetBool(animationParams[animationParam.Crouch], isCrouch);
+
+            if(isCrouch&&isRunning)
+            {
+                isRunning = false;
+                animator.SetBool(animationParams[animationParam.Run], false);
+            }
+            return;
+        }
+
+        /// <summary>
+        /// Call To Start/Stop Run
+        /// </summary>
+        /// <param name="value">Use Null to Toggle action</param>
+        public void RunFunc(bool? value = null) 
+        {
+            if (nowState == State.Falling) return;          
+            isRunning = value != null ? value.Value : !isRunning;
+            animator.SetBool(animationParams[animationParam.Run], isRunning);
+
+            if(isRunning && isCrouch)
+            {
+                isCrouch = false;
+                animator.SetBool(animationParams[animationParam.Crouch], false);
+            }
+            return;
         }
         #endregion
 
@@ -75,17 +149,17 @@ namespace Tuy.UnityForge.Base
 
             groundLayer = LayerMask.GetMask("Ground");
 
-            controllerCenter = controller.center;
             controllerHeight = controller.height;
         }
         #endregion
 
         #region Protected Methods
-        protected void UpdatePosition()
+        protected void UpdateInfo()
         {
             playerVelocity.x = 0f;
             playerVelocity.z = 0f;
 
+            //Ground Check
             bool isGrounded = controller.isGrounded;
             if (!isGrounded)
             {
@@ -101,6 +175,7 @@ namespace Tuy.UnityForge.Base
                 nextState = State.Idle;
             }
 
+            //Jump Check
             if(isJump)
             {
                 nextState = State.Jump;
@@ -109,25 +184,31 @@ namespace Tuy.UnityForge.Base
                 nextState = State.Falling;
             }
 
-
+            //moving Check
             if (moveingDir != Vector2.zero)
             {
-                playerVelocity.x = moveingDir.x * speed;
-                playerVelocity.z = moveingDir.y * speed;
-                if (nowState == State.Idle) nextState = State.Walk;
+                float moveSpeed = new System.Func<float>(() => {
+                    if (isCrouch) return crouchSpeed;
+                    if (isRunning) return runSpeed;
+                    return walkSpeed;
+                })();
+
+                playerVelocity.x = moveingDir.x * moveSpeed;
+                playerVelocity.z = moveingDir.y * moveSpeed;
+                if (nowState == State.Idle) nextState = State.Move;
                 UpdateWalkingAnim();
             }
             else
             {
-                if (nowState == State.Walk) nextState = State.Idle;
+                if (nowState == State.Move) nextState = State.Idle;
             }
-
             controller.Move(playerVelocity * Time.deltaTime);
+
         }
         protected void UpdateWalkingAnim()
         {
-            animator.SetFloat("XDir", moveingDir.x);
-            animator.SetFloat("YDir", moveingDir.y);
+            animator.SetFloat(animationParams[animationParam.XDir], moveingDir.x);
+            animator.SetFloat(animationParams[animationParam.YDir], moveingDir.y);
         }
         #endregion
 
@@ -140,36 +221,36 @@ namespace Tuy.UnityForge.Base
             {
                 switch (state)
                 {
-                    case State.Walk:
-                        animator.SetBool("Walking", true);
+                    case State.Move:
+                        animator.SetBool(animationParams[animationParam.Move], true);
                         _nextState = state;
                         break;
                     case State.Jump:
-                        animator.SetTrigger("Jump");
+                        animator.SetTrigger(animationParams[animationParam.Jump]);
                         _nextState = state;
                         break;
                     case State.Falling:
-                        animator.SetBool("Falling", true);
+                        animator.SetBool(animationParams[animationParam.Fall], true);
                         _nextState = state;
                         break;
                     default:
                         return;
                 }
             }
-            else if(nowState == State.Walk)
+            else if(nowState == State.Move)
             {
                 switch (state)
                 {
                     case State.Idle:
-                        animator.SetBool("Walking", false);
+                        animator.SetBool(animationParams[animationParam.Move], false);
                         _nextState = state;
                         break;
                     case State.Jump:
-                        animator.SetTrigger("Jumping");
+                        animator.SetTrigger(animationParams[animationParam.Jump]);
                         _nextState = state;
                         break;
                     case State.Falling:
-                        animator.SetBool("Falling", true);
+                        animator.SetBool(animationParams[animationParam.Fall], true);
                         _nextState = state;
                         break;
                     default:
@@ -181,11 +262,11 @@ namespace Tuy.UnityForge.Base
                 switch (state)
                 {
                     case State.Idle:
-                        animator.SetBool("Walking", false);
+                        animator.SetBool(animationParams[animationParam.Move], false);
                         _nextState = state;
                         break;
                     case State.Falling:
-                        animator.SetBool("Falling", true);
+                        animator.SetBool(animationParams[animationParam.Fall], true);
                         _nextState = state;
                         break;
                     default:
@@ -197,8 +278,8 @@ namespace Tuy.UnityForge.Base
                 switch (state)
                 {
                     case State.Idle:
-                        animator.SetBool("Walking", false);
-                        animator.SetBool("Falling", false);
+                        animator.SetBool(animationParams[animationParam.Move], false);
+                        animator.SetBool(animationParams[animationParam.Fall], false);
                         _nextState = state;
                         break;
                 }
@@ -209,21 +290,25 @@ namespace Tuy.UnityForge.Base
 
         private void OnAnimatorIK(int _layerIndex)
         {
-            float weightValue = (playerVelocity.x == 0 && playerVelocity.z == 0) ? 1 : 0.3f;
-            
-            Vector3? leftGoal =  ApplyFootIK(AvatarIKGoal.LeftFoot, weightValue);
-            Vector3? rightGoal = ApplyFootIK(AvatarIKGoal.RightFoot, weightValue);
-
-            if(leftGoal == null || rightGoal == null)
+            float footWeightValue = (playerVelocity.x == 0 && playerVelocity.z == 0) ? 1 : 0.1f;
+            Vector3? leftGoal =  ApplyFootIK(AvatarIKGoal.LeftFoot, footWeightValue);
+            Vector3? rightGoal = ApplyFootIK(AvatarIKGoal.RightFoot, footWeightValue);
+            if ( leftGoal != null && rightGoal != null && !isCrouch)
             {
-                controller.height = controllerHeight;
-                controller.center = controllerCenter;
+                float HeightGap = Mathf.Abs(leftGoal.Value.y - rightGoal.Value.y);
+                controller.height = Math.Clamp(controllerHeight - HeightGap, controllerCrouchHeight, controllerHeight);
+                controller.center = controllerCenter + new Vector3 (0, HeightGap/2, 0);
             }
             else
             {
-                float heightGap = Mathf.Abs(leftGoal.Value.y - rightGoal.Value.y);
-                controller.height = controllerHeight - heightGap;
-                controller.center = controllerCenter + new Vector3(0, heightGap/2, 0);
+                controller.height = isCrouch ? controllerCrouchHeight : controllerHeight;
+                controller.center = controllerCenter;
+            }
+            
+            if(aimPoint != null)
+            {
+                animator.SetLookAtPosition(aimPoint.position);
+                animator.SetLookAtWeight(1);
             }
             
         }
@@ -232,7 +317,6 @@ namespace Tuy.UnityForge.Base
             Vector3 footPosition = animator.GetIKPosition(foot);
             RaycastHit hit;
 
-            // 발 아래로 Ray를 쏴서 지면을 감지
             if (Physics.Raycast(footPosition+new Vector3(0, footIKHeight, 0), Vector3.down, out hit, footIKHeight*2, groundLayer))
             {
                 Vector3 targetFootPosition = hit.point + new Vector3(0, 0.1f, 0);;

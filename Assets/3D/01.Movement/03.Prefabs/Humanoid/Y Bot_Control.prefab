@@ -16,6 +16,10 @@ PrefabInstance:
       propertyPath: m_LocalPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1793504718865161554, guid: cc08e74aa46d2ae43afd7371776d9079, type: 3}
+      propertyPath: m_SkinWidth
+      value: 0.001
+      objectReference: {fileID: 0}
     - target: {fileID: 2086478134032910557, guid: cc08e74aa46d2ae43afd7371776d9079, type: 3}
       propertyPath: onNoTrigger.m_PersistentCalls.m_Calls.Array.size
       value: 1
@@ -163,6 +167,11 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 5254439108767382800}
   m_SourcePrefab: {fileID: 100100000, guid: cc08e74aa46d2ae43afd7371776d9079, type: 3}
+--- !u!143 &663055598237569583 stripped
+CharacterController:
+  m_CorrespondingSourceObject: {fileID: 1793504718865161554, guid: cc08e74aa46d2ae43afd7371776d9079, type: 3}
+  m_PrefabInstance: {fileID: 1283643024566980477}
+  m_PrefabAsset: {fileID: 0}
 --- !u!95 &4237028514721762156 stripped
 Animator:
   m_CorrespondingSourceObject: {fileID: 3106525500827763729, guid: cc08e74aa46d2ae43afd7371776d9079, type: 3}
@@ -186,9 +195,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   animator: {fileID: 4237028514721762156}
-  rb: {fileID: 5753215060902323120}
+  controller: {fileID: 663055598237569583}
   bottomCollider: {fileID: 0}
+  footIKHeight: 0.45
   speed: 5
+  jumpHeight: 0
+  gravityMultiplier: 0
+  controllerCrouchHeight: 0
 --- !u!114 &5254439108767382800
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -307,8 +320,3 @@ MonoBehaviour:
   m_DefaultActionMap: Player
   m_SplitScreenIndex: -1
   m_Camera: {fileID: 0}
---- !u!54 &5753215060902323120 stripped
-Rigidbody:
-  m_CorrespondingSourceObject: {fileID: 6775643761154960589, guid: cc08e74aa46d2ae43afd7371776d9079, type: 3}
-  m_PrefabInstance: {fileID: 1283643024566980477}
-  m_PrefabAsset: {fileID: 0}
